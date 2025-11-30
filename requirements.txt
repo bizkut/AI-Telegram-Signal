@@ -1,0 +1,4 @@
+telethon
+openai
+python-dotenv
+asyncio

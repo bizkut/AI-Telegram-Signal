@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  signal-server:
+    build: .
+    container_name: mt5-signal-server
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    env_file:
+      - .env
+    # Volumes are optional here if code doesn't change, 
+    # but good for logs if we were writing to files.
+    # volumes:
+    #   - ./logs:/app/logs
