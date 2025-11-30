@@ -1,0 +1,1 @@
+Telegram -> AI -> MT5
