@@ -15,6 +15,7 @@ input int      InpServerPort = 8888;         // Server Port
 input int      InpMagic      = 123456;       // Magic Number
 input double   InpFixedLot   = 0.01;         // Fixed Lot Size
 input int      InpSlippage   = 20;           // Max Slippage (points)
+input int      InpMaxDiff    = 50;           // Max Difference in Points for Market Order (5 pips)
 
 // Globals
 int socket = INVALID_HANDLE;
@@ -121,7 +122,7 @@ void ParseAndExecute(string json_str)
    
    if(action == "NEW") {
       string type = json["order_type"].ToStr();
-      double entry = json["entry"].ToDbl(); // Market orders usually ignore this, strictly speaking
+      double entry = json["entry"].ToDbl();
       double sl = json["sl"].ToDbl();
       
       // Determine TP (First one)
@@ -129,10 +130,38 @@ void ParseAndExecute(string json_str)
       CJAVal* tp_arr = json["tp"];
       if(tp_arr != NULL && tp_arr.Size() > 0) tp = tp_arr[0].ToDbl();
       
-      if(type == "SELL") trade.Sell(InpFixedLot, symbol, 0, sl, tp);
-      else if(type == "BUY") trade.Buy(InpFixedLot, symbol, 0, sl, tp);
+      double current_bid = SymbolInfoDouble(symbol, SYMBOL_BID);
+      double current_ask = SymbolInfoDouble(symbol, SYMBOL_ASK);
+      double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
       
-      // Note: Limits/Stops require more logic matching "entry" to current price
+      if(type == "BUY") {
+         // Calculate difference in points
+         double diff_points = MathAbs(entry - current_ask) / point;
+         
+         if(diff_points <= InpMaxDiff) {
+            trade.Buy(InpFixedLot, symbol, 0, sl, tp);
+         }
+         else if(entry < current_ask) {
+            trade.BuyLimit(InpFixedLot, entry, symbol, sl, tp);
+         }
+         else {
+            trade.BuyStop(InpFixedLot, entry, symbol, sl, tp);
+         }
+      }
+      else if(type == "SELL") {
+         // Calculate difference in points
+         double diff_points = MathAbs(entry - current_bid) / point;
+         
+         if(diff_points <= InpMaxDiff) {
+            trade.Sell(InpFixedLot, symbol, 0, sl, tp);
+         }
+         else if(entry > current_bid) {
+            trade.SellLimit(InpFixedLot, entry, symbol, sl, tp);
+         }
+         else {
+            trade.SellStop(InpFixedLot, entry, symbol, sl, tp);
+         }
+      }
    }
    else if(action == "CLOSE") {
       CloseAllPositions(symbol); 
