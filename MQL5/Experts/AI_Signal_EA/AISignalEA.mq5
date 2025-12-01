@@ -211,14 +211,37 @@ void CloseAllPositions(string symbol)
 //+------------------------------------------------------------------+
 void ClosePartialPositions(string symbol, double ratio)
 {
+   double min_lot = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
+   double lot_step = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
+
    for(int i=PositionsTotal()-1; i>=0; i--) {
       if(PositionGetSymbol(i) == symbol) {
          if(PositionGetInteger(POSITION_MAGIC) == InpMagic || InpMagic == 0) {
             ulong ticket = PositionGetTicket(i);
             double vol = PositionGetDouble(POSITION_VOLUME);
-            double close_vol = NormalizeDouble(vol * ratio, 2);
-            // Minimum lot check needed here usually, simplified for now
-            trade.PositionClosePartial(ticket, close_vol);
+            
+            // 1. If we are already at minimum lot, close full
+            if(vol <= min_lot) {
+               Print("Volume at minimum (" + DoubleToString(vol, 2) + "), Closing FULL position " + IntegerToString(ticket));
+               trade.PositionClose(ticket);
+               continue;
+            }
+            
+            // 2. Calculate Partial Volume
+            double close_vol = vol * ratio;
+            
+            // Align with Step
+            close_vol = MathFloor(close_vol / lot_step) * lot_step;
+            
+            // Ensure close_vol is at least min_lot
+            if(close_vol < min_lot) close_vol = min_lot;
+            
+            // Ensure we don't accidentally close more than we have (or equal, if handled above)
+            if(close_vol >= vol) {
+               trade.PositionClose(ticket);
+            } else {
+               trade.PositionClosePartial(ticket, close_vol);
+            }
          }
       }
    }
