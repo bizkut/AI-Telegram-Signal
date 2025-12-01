@@ -61,6 +61,15 @@ In your MetaTrader 5 Expert Advisor (EA), use the `Socket` functions to connect:
 *   **Host**: `localhost` (if MT5 is on the same machine) or the Server IP.
 *   **Port**: `8888` (Default)
 
+**Logic Features:**
+
+1.  **Smart Entry:**
+    *   If current price is within `InpMaxDiff` (default 50 points/5 pips) of Signal Entry -> **Market Order**.
+    *   If price has moved away -> **Pending Order** (Limit/Stop) placed at Signal Entry price.
+2.  **Minimum Lot Safety:**
+    *   If a "Close Partial" signal arrives but your trade is already at the Minimum Lot Size (e.g. 0.01), the EA will **Close Fully** instead of failing.
+
+
 **Example JSON Payload Sent to MT5:**
 
 1. **New Signal:**
@@ -138,4 +147,7 @@ To connect your MetaTrader 5 terminal to this server:
     *   In MT5 Options -> Expert Advisors -> Check "Allow WebRequest for listed URL".
     *   Add `127.0.0.1` or `localhost` (though Sockets often bypass this, it's good practice).
 5.  **Run**: Drag the EA onto a chart (any chart, e.g., EURUSD M1).
-6.  **Inputs**: Ensure `Host` matches your server (default `127.0.0.1`) and `Port` is `8888`.
+6.  **Inputs**:
+    *   **Host**: `127.0.0.1` (or your Cloudflare Tunnel URL).
+    *   **Port**: `8888`.
+    *   **InpMaxDiff**: Max distance in points to allow immediate Market execution (Default 50 points = 5 pips).
