@@ -5,7 +5,7 @@ This project is a high-performance, Dockerized signal server that bridges Telegr
 ## Architecture
 
 1.  **Telegram Listener**: Listens to configured channels.
-2.  **AI Processor**: OpenAI extracts Symbol, Type, Entry, SL, and TP.
+2.  **AI Processor**: OpenAI extracts Symbol, Type, Entry range (min/max), SL, and TP.
 3.  **TCP Server**: Broadcasts structured JSON signals to connected TCP clients (MT5 EAs).
 
 ## Prerequisites
@@ -63,25 +63,32 @@ In your MetaTrader 5 Expert Advisor (EA), use the `Socket` functions to connect:
 
 **Logic Features:**
 
-1.  **Smart Entry:**
-    *   If current price is within `InpMaxDiff` (default 50 points/5 pips) of Signal Entry -> **Market Order**.
-    *   If price has moved away -> **Pending Order** (Limit/Stop) placed at Signal Entry price.
-2.  **Minimum Lot Safety:**
+1.  **Entry Range Support (Scalping):**
+    *   For signals with entry ranges (e.g., "4233-4240"), the EA opens **Market Orders** when current price is within the `entry_min` to `entry_max` range.
+    *   If price is outside the range, **Pending Orders** are placed at range boundaries:
+        - BUY: `BuyLimit` at `entry_max` (if price above range) or `BuyStop` at `entry_min` (if price below range)
+        - SELL: `SellLimit` at `entry_min` (if price below range) or `SellStop` at `entry_max` (if price above range)
+2.  **Pending Order Expiration:**
+    *   All pending orders have configurable expiration time (`InpPendingExpiry`, default 30 minutes) suitable for scalping signals.
+3.  **Profit-Only Closing:**
+    *   Close signals only close positions that are in profit. Positions not in profit remain open with SL/TP protection.
+4.  **Minimum Lot Safety:**
     *   If a "Close Partial" signal arrives but your trade is already at the Minimum Lot Size (e.g. 0.01), the EA will **Close Fully** instead of failing.
 
 
 **Example JSON Payload Sent to MT5:**
 
-1. **New Signal:**
+1. **New Signal (with Entry Range):**
 ```json
 {
   "symbol": "XAUUSD",
   "action": "NEW",
   "order_type": "SELL",
-  "entry": 2024.50,
-  "sl": 2030.00,
-  "tp": [2020.00, 2015.00],
-  "comment": "Gold Snipers Scalp"
+  "entry_min": 4233.0,
+  "entry_max": 4240.0,
+  "sl": 4242.0,
+  "tp": [4231.0, 4230.0, 4226.0],
+  "comment": "Gold Scalping Signal"
 }
 ```
 
@@ -150,4 +157,4 @@ To connect your MetaTrader 5 terminal to this server:
 6.  **Inputs**:
     *   **Host**: `127.0.0.1` (or your Cloudflare Tunnel URL).
     *   **Port**: `8888`.
-    *   **InpMaxDiff**: Max distance in points to allow immediate Market execution (Default 50 points = 5 pips).
+    *   **InpPendingExpiry**: Pending order expiration time in minutes (Default 30 minutes). Suitable for scalping signals.
