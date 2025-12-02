@@ -15,7 +15,7 @@ input int      InpServerPort = 8888;         // Server Port
 input int      InpMagic      = 123456;       // Magic Number
 input double   InpFixedLot   = 0.01;         // Fixed Lot Size
 input int      InpSlippage   = 20;           // Max Slippage (points)
-input int      InpMaxDiff    = 50;           // Max Difference in Points for Market Order (5 pips)
+input int      InpPendingExpiry = 30;        // Pending Order Expiry (minutes)
 
 // Globals
 int socket = INVALID_HANDLE;
@@ -122,7 +122,8 @@ void ParseAndExecute(string json_str)
    
    if(action == "NEW") {
       string type = json["order_type"].ToStr();
-      double entry = json["entry"].ToDbl();
+      double entry_min = json["entry_min"].ToDbl();
+      double entry_max = json["entry_max"].ToDbl();
       double sl = json["sl"].ToDbl();
       
       // Determine TP (First one)
@@ -132,34 +133,42 @@ void ParseAndExecute(string json_str)
       
       double current_bid = SymbolInfoDouble(symbol, SYMBOL_BID);
       double current_ask = SymbolInfoDouble(symbol, SYMBOL_ASK);
-      double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
+      
+      // Calculate expiration time for pending orders
+      datetime expiry = TimeCurrent() + InpPendingExpiry * 60;
       
       if(type == "BUY") {
-         // Calculate difference in points
-         double diff_points = MathAbs(entry - current_ask) / point;
-         
-         if(diff_points <= InpMaxDiff) {
+         // If current price is within entry range, open market order
+         if(current_ask >= entry_min && current_ask <= entry_max) {
+            Print("Price ", current_ask, " within entry range [", entry_min, "-", entry_max, "], opening Market Buy");
             trade.Buy(InpFixedLot, symbol, 0, sl, tp);
          }
-         else if(entry < current_ask) {
-            trade.BuyLimit(InpFixedLot, entry, symbol, sl, tp);
+         else if(current_ask > entry_max) {
+            // Price above range, use BuyLimit at entry_max
+            Print("Price ", current_ask, " above entry range, placing BuyLimit at ", entry_max, " expiry ", expiry);
+            trade.BuyLimit(InpFixedLot, entry_max, symbol, sl, tp, ORDER_TIME_SPECIFIED, expiry);
          }
          else {
-            trade.BuyStop(InpFixedLot, entry, symbol, sl, tp);
+            // Price below range, use BuyStop at entry_min
+            Print("Price ", current_ask, " below entry range, placing BuyStop at ", entry_min, " expiry ", expiry);
+            trade.BuyStop(InpFixedLot, entry_min, symbol, sl, tp, ORDER_TIME_SPECIFIED, expiry);
          }
       }
       else if(type == "SELL") {
-         // Calculate difference in points
-         double diff_points = MathAbs(entry - current_bid) / point;
-         
-         if(diff_points <= InpMaxDiff) {
+         // If current price is within entry range, open market order
+         if(current_bid >= entry_min && current_bid <= entry_max) {
+            Print("Price ", current_bid, " within entry range [", entry_min, "-", entry_max, "], opening Market Sell");
             trade.Sell(InpFixedLot, symbol, 0, sl, tp);
          }
-         else if(entry > current_bid) {
-            trade.SellLimit(InpFixedLot, entry, symbol, sl, tp);
+         else if(current_bid < entry_min) {
+            // Price below range, use SellLimit at entry_min
+            Print("Price ", current_bid, " below entry range, placing SellLimit at ", entry_min, " expiry ", expiry);
+            trade.SellLimit(InpFixedLot, entry_min, symbol, sl, tp, ORDER_TIME_SPECIFIED, expiry);
          }
          else {
-            trade.SellStop(InpFixedLot, entry, symbol, sl, tp);
+            // Price above range, use SellStop at entry_max
+            Print("Price ", current_bid, " above entry range, placing SellStop at ", entry_max, " expiry ", expiry);
+            trade.SellStop(InpFixedLot, entry_max, symbol, sl, tp, ORDER_TIME_SPECIFIED, expiry);
          }
       }
    }
@@ -193,14 +202,32 @@ void ParseAndExecute(string json_str)
 }
 
 //+------------------------------------------------------------------+
-//| Helper: Close All Positions for Symbol                           |
+//| Helper: Close All Positions for Symbol (Only if in profit)       |
 //+------------------------------------------------------------------+
 void CloseAllPositions(string symbol)
 {
    for(int i=PositionsTotal()-1; i>=0; i--) {
       if(PositionGetSymbol(i) == symbol) {
          if(PositionGetInteger(POSITION_MAGIC) == InpMagic || InpMagic == 0) {
-            trade.PositionClose(PositionGetTicket(i));
+            ulong ticket = PositionGetTicket(i);
+            double profit = PositionGetDouble(POSITION_PROFIT);
+            
+            if(profit > 0) {
+               Print("Position ", ticket, " in profit (", profit, "), closing...");
+               trade.PositionClose(ticket);
+            }
+            else {
+               // Not in profit - ensure SL and TP are set
+               double sl = PositionGetDouble(POSITION_SL);
+               double tp = PositionGetDouble(POSITION_TP);
+               
+               if(sl == 0 || tp == 0) {
+                  Print("Position ", ticket, " not in profit (", profit, "), SL/TP missing. Please set manually.");
+               }
+               else {
+                  Print("Position ", ticket, " not in profit (", profit, "), keeping open with SL=", sl, " TP=", tp);
+               }
+            }
          }
       }
    }

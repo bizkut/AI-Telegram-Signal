@@ -28,7 +28,8 @@ class SignalProcessor:
             '  "symbol": "string (e.g., XAUUSD, EURUSD)",\n'
             '  "action": "string (NEW, CLOSE, CLOSE_PARTIAL, MODIFY, CLOSE_PARTIAL_AND_BREAKEVEN)",\n'
             '  "order_type": "string (BUY, SELL, BUY LIMIT, SELL LIMIT, null for CLOSE/MODIFY)",\n'
-            '  "entry": "float (or null)",\n'
+            '  "entry_min": "float (lower bound of entry range, or single entry price)",\n'
+            '  "entry_max": "float (upper bound of entry range, or same as entry_min if single price)",\n'
             '  "sl": "float (Stop Loss, or null)",\n'
             '  "tp": [float] (Array of Take Profit levels),\n'
             '  "close_ratio": "float (0.0 to 1.0, e.g. 0.5 for half close, 1.0 for full close)",\n'
@@ -47,7 +48,8 @@ class SignalProcessor:
             "   - Action is 'MODIFY'. Extract new SL or TP.\n"
             "   - Use Context to identify Symbol.\n"
             "5. If multiple TPs are given, list them.\n"
-            "6. If Entry is a range, use the first value.\n"
+            "6. If Entry is a range (e.g., '4233-4240'), set entry_min to the lower value and entry_max to the upper value.\n"
+            "   If Entry is a single price, set both entry_min and entry_max to that price.\n"
             "7. Output ONLY raw JSON. Return null if not a trading instruction."
         )
 
